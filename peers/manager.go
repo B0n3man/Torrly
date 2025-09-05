@@ -32,23 +32,30 @@ func (pm *PeerManager) HandlePeers() {
 
 	var wg sync.WaitGroup
 
+	// This does the error thing
+	handleErr := func(p *Peer, err error, msg string) bool {
+		if err != nil {
+			fmt.Printf("%s: %v\n", msg, err)
+			if p.conn != nil {
+				p.conn.Close()
+			}
+			return true
+		}
+		return false
+	}
+
 	for i := range pm.peers {
-		p := &pm.peers[i]
+		peer := &pm.peers[i]
 
-		if err := p.connect(); err != nil {
-			fmt.Println("Error connecting to peer:", err)
+		if handleErr(peer, peer.connect(), "Error connecting to peer") {
 			continue
 		}
 
-		if err = hs.ExchangeHandshake(p.conn); err != nil {
-			p.conn.Close()
-			fmt.Println("Handshake failed:", err)
+		if handleErr(peer, hs.ExchangeHandshake(peer.conn), fmt.Sprintf("Handshake failed with: %s", peer.IP.String())) {
 			continue
 		}
 
-		if err := pm.AddPeer(p); err != nil {
-			fmt.Printf("Error adding peer %s: %v\n", p.IP.String(), err)
-			p.conn.Close()
+		if handleErr(peer, pm.AddPeer(peer), fmt.Sprintf("Error adding peer %s", peer.IP.String())) {
 			continue
 		}
 
@@ -56,10 +63,9 @@ func (pm *PeerManager) HandlePeers() {
 		go func(p *Peer) {
 			defer wg.Done()
 			if err := p.ReadLoop(); err != nil {
-				fmt.Printf("Error reading from peer %s: %v\n", p.IP.String(), err)
-				p.conn.Close()
+				handleErr(p, err, fmt.Sprintf("Error reading from peer %s", p.IP.String()))
 			}
-		}(p)
+		}(peer)
 	}
 
 	wg.Wait()

@@ -6,10 +6,10 @@ type bitfield []bool
 
 type PieceManager struct {
 	Pieces      []*Piece
-	Bitfield    bitfield
+	Bitfield    bitfield // Our very own bitfield to track completed pieces
 	Length      int
 	PieceLength int
-	Pending     map[int]bool
+	Pending     map[int]bool // Tracks pieces that are currently being downloaded
 }
 
 func NewPieceManager(hashes []hash, bfield []bool, length, pieceLength int) *PieceManager {
