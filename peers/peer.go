@@ -20,9 +20,9 @@ type Peer struct {
 
 // Read function reads a `messages.Message` from the peer's connection.
 // (Optionally) accepts a timeout duration to set a read deadline.
-// If no timeout is provided, it defaults to 5 seconds.
+// If no timeout is provided, it defaults to 2 minutes.
 func (p *Peer) Read(timeout ...time.Duration) (*messages.Message, error) {
-	duration := 5 * time.Second // Default timeout
+	duration := 120 * time.Second
 	if len(timeout) > 0 {
 		duration = timeout[0]
 	}
@@ -50,9 +50,11 @@ func (p *Peer) ReadLoop() error {
 		case messages.MsgBitfield:
 			p.setBitfield(bytesToBoolSlice(msg.Payload))
 		case messages.MsgChoke:
-			p.choke()
+			// p.choke()
+			fmt.Printf("Peer %s has choked us\n", p.IP.String())
 		case messages.MsgUnchoke:
 			p.unchoke()
+			fmt.Printf("Peer %s has unchoked us\n", p.IP.String())
 		case messages.MsgHave:
 			fmt.Printf("Peer %s has piece %d\n", p.IP.String(), len(msg.Payload))
 		case messages.MsgPiece:
@@ -128,15 +130,45 @@ func bytesToBoolSlice(bf []byte) []bool {
 // COnnect to the associated peer using its IP and Port.
 // Attaches the connection to the `peer` struct which MUST
 // be closed by the caller later in the program.
-func (p *Peer) connect() error {
-	addr := net.JoinHostPort(p.IP.String(), strconv.Itoa(p.Port))
-	c, err := net.DialTimeout("tcp", addr, time.Second*5)
-	if err != nil {
-		return err
+func (p *Peer) Connect() error {
+	ipStr := p.IP.String()
+	portStr := strconv.Itoa(p.Port)
+	addr := net.JoinHostPort(ipStr, portStr)
+
+	// pick family based on parsed IP
+	var tryOrder []string
+	if p.IP == nil {
+		// fallback to generic tcp (let resolver decide) if IP unknown
+		tryOrder = []string{"tcp"}
+	} else if p.IP.To4() != nil {
+		// IPv4 address
+		tryOrder = []string{"tcp4", "tcp"}
+	} else {
+		// IPv6 address: try IPv6 first, then optionally try IPv4 fallback (only if sensible)
+		tryOrder = []string{"tcp6", "tcp4", "tcp"}
 	}
 
-	p.conn = c
+	var conn net.Conn
+	var lastErr error
+	for _, network := range tryOrder {
+		c, err := net.DialTimeout(network, addr, 5*time.Second)
+		if err == nil {
+			conn = c
+			break
+		}
+		lastErr = err
+		// If this was an IPv6 attempt and the error indicates "network unreachable",
+		// continue to try the next network.
+	}
 
+	if conn == nil {
+		if lastErr != nil {
+			return lastErr
+		}
+		return fmt.Errorf("failed to dial peer %s", addr)
+	}
+
+	p.conn = conn
 	fmt.Println(strings.Repeat("-", 50))
 	fmt.Printf("Connected to peer: %s\n", p.IP.String())
 	fmt.Println(strings.Repeat("-", 50))

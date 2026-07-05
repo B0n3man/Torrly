@@ -47,7 +47,7 @@ func (pm *PeerManager) HandlePeers() {
 	for i := range pm.peers {
 		peer := &pm.peers[i]
 
-		if handleErr(peer, peer.connect(), "Error connecting to peer") {
+		if handleErr(peer, peer.Connect(), "Error connecting to peer") {
 			continue
 		}
 
@@ -62,6 +62,7 @@ func (pm *PeerManager) HandlePeers() {
 		wg.Add(1)
 		go func(p *Peer) {
 			defer wg.Done()
+			p.SendInterested()
 			if err := p.ReadLoop(); err != nil {
 				handleErr(p, err, fmt.Sprintf("Error reading from peer %s", p.IP.String()))
 			}

@@ -81,6 +81,13 @@ func (t *Torrent) ViewTorrent() {
 	fmt.Println()
 }
 
+func (t *Torrent) FirstTwentyHashes() {
+	fmt.Println("First 20 piece hashes:")
+	for i := 0; i < 20 && i < len(t.PieceHashes); i++ {
+		fmt.Printf("%d: %x\n", i, t.PieceHashes[i])
+	}
+}
+
 func (t *Torrent) StartDownload() {
 	pArr, err := t.GetAvailablePeers()
 	if err != nil {

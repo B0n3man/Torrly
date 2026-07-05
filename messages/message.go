@@ -9,16 +9,16 @@ import (
 type MsgID = uint8
 
 const (
-	MsgKeepAlive MsgID = 255
-	MsgChoke     MsgID = iota
-	MsgUnchoke
-	MsgInterested
-	MsgNotInterested
-	MsgHave
-	MsgBitfield
-	MsgRequest
-	MsgPiece
-	MsgCancel
+	MsgKeepAlive     MsgID = 255
+	MsgChoke         MsgID = 0
+	MsgUnchoke       MsgID = 1
+	MsgInterested    MsgID = 2
+	MsgNotInterested MsgID = 3
+	MsgHave          MsgID = 4
+	MsgBitfield      MsgID = 5
+	MsgRequest       MsgID = 6
+	MsgPiece         MsgID = 7
+	MsgCancel        MsgID = 8
 )
 
 type Message struct {
@@ -78,20 +78,28 @@ func Receive(r io.Reader) (*Message, error) {
 	}
 	length := binary.BigEndian.Uint32(lengthBuf)
 
-	// keep-alive message
+	// FIX: Handle Keep-Alive
 	if length == 0 {
-		return &Message{ID: MsgKeepAlive}, nil
-	}
+		return &Message{ID: MsgKeepAlive, Payload: nil}, nil
+	} else {
+		id := make([]byte, 1)
+		if _, err := io.ReadFull(r, id); err != nil {
+			return nil, err
+		}
+		msgID := MsgID(id[0])
 
-	buf := make([]byte, length)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return nil, err
-	}
+		payloadLength := int(length) - 1
+		payload := make([]byte, payloadLength)
 
-	msg := &Message{
-		ID:      MsgID(buf[0]),
-		Payload: buf[1:],
-	}
+		if _, err := io.ReadFull(r, payload); err != nil {
+			return nil, err
+		}
 
-	return msg, nil
+		msg := &Message{
+			ID:      msgID,
+			Payload: payload,
+		}
+
+		return msg, nil
+	}
 }
